@@ -1,97 +1,218 @@
-#!/usr/bin/python2
+#!/usr/bin/python
+import os, sys
+import ctypes
+KIPR=ctypes.CDLL("/usr/lib/libkipr.so")
 
-# general purpose functions for Explorer Post 1010's botball team
-# legobot variant
+tophat_left = 1
+tophat_right = 0
+front_button = 0
+side_button = 1
+back_right_button = 2
+back_button = 3
+top_button = 4
+left_motor = 1
+right_motor = 0
 
-# imports
-from wallaby import *
+claw = 2
+closed = 1000
+opened = 2000
 
-# constants
-left_motor = 0
-right_motor = 1
-pulley = 2
+arm = 0
+joint = 1
 
-toph_left = 0
-toph_right = 1
-toph_front = 2
+down = 1150
+mostlydown = 1000
+middown = 1180
+mid = 450
+up = 0
+horizontal = 0
+angled = 500
+vertical = 1000
 
-claw = 0
-opened = 100
-closed = 2000
+black = 2000
 
-degrees_to_ticks = 6100
-gyroscope_bias = .217625
+def drive(left_power, right_power, time = 5):
+	KIPR.mav(left_motor, left_power)
+	KIPR.mav(right_motor, right_power)
+	KIPR.msleep(time)
+	stop()
 
-# general function for moving
-current_left_power = 0
-current_right_power = 0 
-current_theta = 0
+def pivot(motor, power, degrees):
+	KIPR.mav(motor, power)
+	KIPR.msleep(degrees*18)
+	stop()
 
-def move(Lpower, Rpower):
-    global current_right_power, current_left_power
-    current_left_power = Lpower
-    current_right_power = Rpower
-    mav(left_motor, Lpower)
-    mav(right_motor, Rpower)
-    msleep(1)
+def line_follow_right(power):
+	if tophat(tophat_right) < black:
+		KIPR.mav(left_motor, power-200)
+		KIPR.mav(right_motor, power+200)
+		KIPR.msleep(5)
+	else:
+		KIPR.mav(left_motor, power+200)
+		KIPR.mav(right_motor, power-200)
+		KIPR.msleep(5)
 
-def turn(targetDegrees, Lpower, Rpower, tickLength=10):
-    global current_theta
-    targetTheta = targetDegrees * degrees_to_ticks
-    move(Lpower,Rpower)
-    while(current_theta < targetTheta):
-        msleep(tickLength)
-        current_theta += abs(getGyroReading() - gyroscope_bias) * tickLength
-    stop()
-    current_theta = 0
+def line_follow_left(power):
+	if tophat(tophat_left) < black:
+		KIPR.mav(left_motor, power+200)
+		KIPR.mav(right_motor, power-200)
+		KIPR.msleep(5)
+	else:
+		KIPR.mav(left_motor, power-200)
+		KIPR.mav(right_motor, power+200)
+		KIPR.msleep(5)
 
-def stop(sleepTime=0):
-    move(0,0)
-    try:
-        msleep(sleepTime)
-    except:
-        pass
-
-def pause(sleepTime):
-    Lpower=current_left_power
-    Rpower=current_right_power
-    move(0,0)
-    msleep(sleepTime)
-    move(Lpower,Rpower)
+def button_follow():
+	if button(back_right_button):
+		pivot(right_motor, -1000, 10)
+	else:
+		drive(-1500, -1300, 5)
 
 
-def go_to_black(Lpower=1000, Rpower=1000):
-    while(analog(toph_left) < 2000 or analog(toph_right) < 2000):
-        move(Lpower, Rpower)
-    stop()
+def tophat(port):
+	return KIPR.analog(port)	
 
-def go_to_white(Lpower=1000, Rpower=1000):
-    while(analog(toph_left) > 2000 or analog(toph_right) > 2000):
-        move(Lpower, Rpower)
-    stop()
+def button(port):
+	return KIPR.digital(port)
 
-# code specific to the scrim
-def lower_pulley():
-    set_servo_position(claw, open)
-    msleep(500)
-    mav(pulley, -1500)
-    msleep(2300)
-    mav(pulley, 0)
-    
-def raise_pulley():
-    set_servo_position(claw, closed)
-    msleep(500)
-    mav(pulley, 1500)
-    msleep(2400)
-    mav(pulley, 0)
+def servo(port, position):
+	KIPR.set_servo_position(port, position)
+	KIPR.msleep(500)
 
-def wait():
-    msleep(5000)
+def stop():
+	KIPR.mav(left_motor, 0)
+	KIPR.mav(right_motor, 0)
+	KIPR.msleep(5)
 
-# planned functions
-def turn_right_wheel(deg):
-    pass
-def turn_left_wheel(deg):
-    pass
-def pid_line_follow_for(baseLeftPower, baseRightPower, time):
-    pass
+def wait(long = False):
+	if long:
+		KIPR.msleep(100000)
+	KIPR.msleep(5000)
+
+def enable():
+	KIPR.enable_servos()
+
+def move_claw(degrees):
+	KIPR.mav(arm, 100)
+	msleep(200*degrees)
+	KIPR.mav(arm, 0)
+	
+def main():
+	#left_motor = motor(1)
+	#right_motor = motor(0)
+	#string_lift = motor(0)
+	#arm = motor(1)
+	#claw = servo(0)
+
+	
+	#setup
+	KIPR.enable_servos()
+	servo(joint, angled)
+	servo(arm, mid)
+	pivot(left_motor, 1000, 90)
+	wait()
+	servo(claw, opened)
+	
+	#grab coupler
+	#KIPR.wait_for_light(5)
+	#KIPR.shut_down_in(119)
+	servo(joint, horizontal)
+	servo(arm, down)
+	drive(1500, 1500, 1500)
+	servo(claw, closed)
+
+	while tophat(tophat_right) < black:
+		drive(-1500, 1500)
+
+	servo(claw, opened)
+	servo(arm, mostlydown)
+	while not button(top_button):
+		line_follow_right(1300)
+	drive(-1500, -1500, 5000)
+	wait()
+
+	#while tophat(tophat_right) > black:
+	#	drive(-600, 0)
+
+	servo(arm, up)
+	servo(joint, vertical)
+#	pivot(left_motor, -1200, 40)
+#	while tophat(tophat_left) < black:
+#		pivot(left_motor, -1200, 1)
+#	while tophat(tophat_right) < black:
+#		pivot(right_motor, -600, 1)
+
+	pivot(right_motor, 1200, 90)
+	while tophat(tophat_right) < black:
+		drive(-1200, -1200)
+	while tophat(tophat_left) < black:
+		drive(-600, 0)
+	
+	
+	#back align and turn onto ramp
+	drive(-1500, -1500, 2500)
+	drive(1000, 1000, 200)
+	pivot(left_motor, 1200, 90)
+
+	#go up ramp
+	while not button(front_button):
+		line_follow_right(1300)
+	stop()
+	
+	#drop coupler
+	#servo(arm, middown)
+	#servo(joint, horizontal)
+	#move_claw(open)
+	#wait()
+	#servo(arm, mid)
+	drive(-1000, -1000, 500)
+	pivot(right_motor, 1200, 90)
+	
+	#go to center
+	servo(arm, mid)
+	servo(joint, angled)
+	servo(claw, closed)
+	while not button(side_button):
+		line_follow_right(1300)
+	drive(-1000, -1200, 100)
+	stop()
+	servo(claw, opened)
+	servo(joint, vertical)
+	servo(arm, down)
+	
+	servo(claw, 1000)
+	servo(arm, 900)
+	servo(claw, 1200)
+	servo(arm, 800)
+	servo(claw, 1400)
+	servo(arm, 700)
+	servo(claw, 1600)
+	servo(arm, 600)
+	servo(claw, closed)
+	servo(arm, mid)
+	servo(joint, angled)
+
+	#go back to corner
+	while not button(back_button):
+		button_follow()
+
+	#align to prepare for drop	
+	servo(arm, up)
+	pivot(right_motor, 1500, 35)
+	pivot(left_motor, 1200, 30)
+	while tophat(tophat_left) < 2000:
+		pivot(left_motor, 1200, 1)
+	while tophat(tophat_right) < 2000:
+		pivot(right_motor, -1200, 1)
+	while tophat(tophat_right) > 2000:
+		pivot(right_motor, -1200, 1)
+	while not button(front_button):
+		drive(1000, 1000, 1)
+
+	servo(arm, middown)
+	#servo(joint, vertical)
+	servo(claw, opened)
+	
+if __name__== "__main__":
+    sys.stdout = os.fdopen(sys.stdout.fileno(),"w",0)
+    main();
